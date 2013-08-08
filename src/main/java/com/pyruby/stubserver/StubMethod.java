@@ -2,10 +2,8 @@ package com.pyruby.stubserver;
 
 import javax.servlet.http.HttpServletRequest;
 import java.io.*;
-import java.util.Enumeration;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.Map;
+import java.util.*;
+import java.util.regex.Pattern;
 
 /**
  * A factory class for constructing the expectation for the {@link StubServer#expect} method. Only supports
@@ -33,6 +31,8 @@ public class StubMethod {
      */
     public byte[] body;
 
+    private Set<String> headerNameExpectations = new HashSet<String>();
+
     protected StubMethod(String method, String url) {
         this.method = method;
         this.url = url;
@@ -50,7 +50,7 @@ public class StubMethod {
     }
 
     /**
-     * Expect a GET request for the supplied url.
+     * Expect a GET requList<String>est for the supplied url.
      *
      * @param url A regular expression string used to test if the request url matches the expected url.
      * @return stubMethod An instance of StubMethod.  When matched, it retains information from the request that
@@ -141,6 +141,18 @@ public class StubMethod {
         return this;
     }
 
+    /**
+     * Sets an expectation that the request will have headers that match a specified regular expression. This enables
+     * a check on the presence of a header rather than its actual value
+     *
+     * @param keyRegex the pattern to be matched.
+     * @return this
+     */
+    public StubMethod ifHeaderNameMatches(String keyRegex) {
+        headerNameExpectations.add(keyRegex);
+        return this;
+    }
+
     public String bodyString() {
         return Expectation.asString(body);
     }
@@ -150,6 +162,22 @@ public class StubMethod {
         boolean match = target.matches(url) && httpServletRequest.getMethod().equals(method);
         if (match) {
             Map<String, String> hdrs = copyTheRequestHeaders(httpServletRequest);
+
+            for (String headerKeyRegex : headerNameExpectations) {
+                boolean headerNameMatch = false;
+
+                Iterator<String> headerKeyIterator = hdrs.keySet().iterator();
+                Pattern pattern = Pattern.compile(headerKeyRegex);
+
+                while (!headerNameMatch && headerKeyIterator.hasNext()) {
+                    headerNameMatch = pattern.matcher(headerKeyIterator.next()).matches();
+                }
+
+                if (!headerNameMatch) {
+                    return false;
+                }
+            }
+
             for (String key : headerExpectations.keySet()) {
                 String exp = headerExpectations.get(key);
                 String act = hdrs.get(key);
@@ -203,6 +231,9 @@ public class StubMethod {
         for (String key : headerExpectations.keySet()) {
             String exp = headerExpectations.get(key);
             b.append(" where ").append(key).append(" matches ").append(exp);
+        }
+        for (String headerName : headerNameExpectations) {
+            b.append(" where ").append(headerName).append(" header exists ");
         }
         return b.toString();
     }

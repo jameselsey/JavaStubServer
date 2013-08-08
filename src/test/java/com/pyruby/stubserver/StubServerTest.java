@@ -2,6 +2,7 @@ package com.pyruby.stubserver;
 
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import java.io.*;
@@ -178,6 +179,33 @@ public class StubServerTest {
             String message = e.getMessage();
             assertTrue(message, message.contains("/some/url"));
             assertTrue(message, message.contains("where Content-Type matches foobar"));
+            return;
+        }
+        fail("Should not have met all expectations");
+    }
+
+    @Test
+    public void expect_shouldAcceptAGetRequestToAUrlThatMatchesAHeaderName() throws IOException {
+        server.expect(get("/my/expected/context").ifHeaderNameMatches("headerN.*"))
+                .thenReturn(200, "application/json", "My expected response");
+
+        makeRequest("/my/expected/context", "GET", "", "headerName", "headerValue");
+
+        server.verify();
+    }
+
+    @Test
+    public void verify_shouldRaiseAnAssertionException_givenThereAreUnsatisfiedHeaderNameMatchExpectations() throws IOException {
+        server.expect(get("/some/url").ifHeaderNameMatches("foo.*")).thenReturn(200, "text/html", "Got me");
+
+        makeRequest("/some/url", "GET", "", "bar", "stuff");
+
+        try {
+            server.verify();
+        } catch (AssertionError e) {
+            String message = e.getMessage();
+            assertTrue(message, message.contains("/some/url"));
+            assertTrue(message, message.contains("where foo.* header exists"));
             return;
         }
         fail("Should not have met all expectations");
